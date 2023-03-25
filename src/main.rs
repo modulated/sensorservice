@@ -3,24 +3,29 @@
 #![warn(clippy::pedantic)]
 #![allow(clippy::unused_async)]
 
-// use axum_macros::debug_handler;
 use axum::{
+    extract::State,
     http::StatusCode,
     routing::{get, post},
-    Json, Router, extract::State,
+    Json, Router,
 };
 use chrono::{DateTime, Utc};
+use dotenvy::dotenv;
 use influxdb::{Client, InfluxDbWriteable, ReadQuery};
 use serde::{Deserialize, Serialize};
+use std::env;
 use std::{net::SocketAddr, sync::Arc};
 
 #[tokio::main]
 async fn main() {
     tracing_subscriber::fmt::init();
+    dotenv().expect(".env file not found");
 
-    let client = Client::new("http://localhost:8086", "sensor").with_token(
-        "j7t6tlAMH6i7UwnjF6tIPiX1xG1N-4l4zGeBkW6qOUFmv28EiB1rruaVxLI9L5E-CI0GPY66-XvvbUNpmwtU_g==",
-    );
+    let token = env::var("TOKEN").expect("Coult not find TOKEN in .env file.");
+    let db_url = env::var("DB_URL").expect("Coult not find DB_URL in .env file.");
+    let db_name = env::var("DB_NAME").expect("Coult not find DB_NAME in .env file.");
+
+    let client = Client::new(db_url, db_name).with_token(token);
     let q = Reading::default().into_query("sensor");
     client.query(&q).await.unwrap();
     tracing::debug!("Inserted {:?}", q);
@@ -49,7 +54,7 @@ async fn root() -> &'static str {
 
 async fn create_reading(
     State(state): State<Arc<Client>>,
-    Json(payload): Json<ReadingWithoutTime>     
+    Json(payload): Json<ReadingWithoutTime>,
 ) -> StatusCode {
     let r: Reading = payload.into();
     let t = r.time;
